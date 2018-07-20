@@ -66,7 +66,7 @@ namespace BossBot
 
             Console.WriteLine("Başlatılıyor...");
             CalculateThisWeeksDates();
-            var timer = new Timer {AutoReset = false, Enabled = true, Interval = 10000};
+            var timer = new Timer {AutoReset = true, Enabled = true, Interval = 60000};
             var lastDay = DateTime.Now.Day;
             timer.Elapsed += delegate
             {
