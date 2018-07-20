@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
@@ -54,18 +56,17 @@ namespace BossBot
 
         public static DiscordSocketClient Client;
 
-        static async Task Main(string[] args)
+        static void Main() => MainAsync().GetAwaiter().GetResult();
+
+        static async Task MainAsync()
         {
             Client = new DiscordSocketClient();
 
             Client.Log += Log;
 
-            string token = ""; // TODO
-            await Client.LoginAsync(TokenType.Bot, token);
-            await Client.StartAsync();
-
+            Console.WriteLine("Başlatılıyor...");
             CalculateThisWeeksDates();
-            var timer = new Timer {AutoReset = true, Enabled = true, Interval = 60000};
+            var timer = new Timer {AutoReset = false, Enabled = true, Interval = 10000};
             var lastDay = DateTime.Now.Day;
             timer.Elapsed += delegate
             {
@@ -83,7 +84,34 @@ namespace BossBot
                 }
             };
 
+            Console.WriteLine("Başlatıldı.");
+
             await Task.Delay(-1);
+        }
+
+        private static async Task Login()
+        {
+            if (Client.ConnectionState == ConnectionState.Connecting ||
+                Client.ConnectionState == ConnectionState.Connected)
+            {
+                return;
+            }
+
+            await Client.LoginAsync(TokenType.Bot, Constants.TOKEN);
+            await Client.StartAsync();
+        }
+
+        private static async Task Logout()
+        {
+            if (Client.ConnectionState == ConnectionState.Disconnecting ||
+                Client.ConnectionState == ConnectionState.Disconnected)
+            {
+                await Task.Delay(1000);
+                return;
+            }
+
+            await Client.LogoutAsync();
+            await Client.StopAsync();
         }
 
         private static Task Log(LogMessage arg)
@@ -92,18 +120,52 @@ namespace BossBot
             return Task.CompletedTask;
         }
 
-        private static void CheckForTime()
+        private static async void CheckForTime()
         {
             foreach (var moment in RuntimeCalculatedDates)
             {
-                // TODO
-                // nasıl yapacam lan ben bunu aq
+                if (moment.Key.AddMinutes(-35).DatesEqualsIgnoreSeconds(DateTime.Now))
+                {
+                    await Login();
+                }
+
+                if (moment.Key.AddMinutes(-30).DatesEqualsIgnoreSeconds(DateTime.Now))
+                {
+                    await NotifyUsers($"{moment.Value}'ya 30 dakika kaldı!");
+                }
+
+                if (moment.Key.AddMinutes(-15).DatesEqualsIgnoreSeconds(DateTime.Now))
+                {
+                    await NotifyUsers($"{moment.Value}'ya 15 dakika kaldı!");
+                }
+
+                if (moment.Key.AddMinutes(-10).DatesEqualsIgnoreSeconds(DateTime.Now))
+                {
+                    await NotifyUsers($"{moment.Value}'ya 10 dakika kaldı!");
+                }
+
+                if (moment.Key.AddMinutes(-5).DatesEqualsIgnoreSeconds(DateTime.Now))
+                {
+                    await NotifyUsers($"{moment.Value}'ya 5 dakika kaldı!");
+                }
+
+                if (moment.Key.DatesEqualsIgnoreSeconds(DateTime.Now))
+                {
+                    await NotifyUsers($"{moment.Value} doğdu!");
+                }
+
+                if (moment.Key.AddMinutes(5).DatesEqualsIgnoreSeconds(DateTime.Now))
+                {
+                    await Logout();
+                }
             }
         }
 
         private static async Task NotifyUsers(string message)
         {
+            Console.WriteLine($"\"{message}\" mesajı gönderiliyor...");
             await Client.GetGuild(ChannelId).GetTextChannel(ChannelId).SendMessageAsync(message);
+            Console.WriteLine("Mesaj gönderildi.");
         }
 
         private static void CalculateThisWeeksDates()
@@ -125,8 +187,33 @@ namespace BossBot
 
         public static DateTime StartOfWeek(this DateTime dt)
         {
-            var diff = (7 + (dt.DayOfWeek - DayOfWeek.Monday)) % 7;
-            return dt.AddDays(-1 * diff).Date;
+            var diff = dt.GetDayOfWeek();
+            return dt.AddDays(-1 * (int)diff).Date;
         }
+
+        public static bool DatesEqualsIgnoreSeconds(this DateTime d1, DateTime d2)
+        {
+            return d1.Year == d2.Year &&
+                   d1.Month == d2.Month &&
+                   d1.Day == d2.Day &&
+                   d1.Hour == d2.Hour &&
+                   d1.Minute == d2.Minute;
+        }
+
+        public static DayOfWeek GetDayOfWeek(this DateTime dt)
+        {
+            return dt.DayOfWeek == System.DayOfWeek.Sunday ? DayOfWeek.Sunday : (DayOfWeek)(dt.DayOfWeek - 1);
+        }
+    }
+
+    public enum DayOfWeek
+    {
+        Monday = 0,
+        Tuesday = 1,
+        Wednesday = 2,
+        Thursday = 3,
+        Friday = 4,
+        Saturday = 5,
+        Sunday = 6
     }
 }
