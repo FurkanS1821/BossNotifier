@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
 using Discord;
@@ -58,35 +56,68 @@ namespace BossBot
 
         static void Main() => MainAsync().GetAwaiter().GetResult();
 
+        public static int LastMinute;
+        public static int LastWeek;
+
         static async Task MainAsync()
         {
             Client = new DiscordSocketClient();
 
             Client.Log += Log;
 
-            Console.WriteLine("Başlatılıyor...");
+            await Log(new LogMessage(LogSeverity.Info, "BossBot", "Başlatılıyor..."));
             CalculateThisWeeksDates();
-            var timer = new Timer {AutoReset = true, Enabled = true, Interval = 60000};
-            var lastDay = DateTime.Now.Day;
-            timer.Elapsed += delegate
+            if (RuntimeCalculatedDates.Any(x =>
+                x.Key > DateTime.Now && x.Key - DateTime.Now <= TimeSpan.FromMinutes(35)))
             {
-                // Her 5 dakikada bir atılacak mesaj var mı diye bak
-                if (DateTime.Now.Minute % 5 == 0)
-                {
-                    CheckForTime();
-                }
+                await Login();
+                await Task.Delay(TimeSpan.FromSeconds(30));
+            }
+            var timer = new Timer {AutoReset = true, Enabled = true, Interval = 1000};
+            Check(true);
+            timer.Elapsed += (a, b) => Check();
 
-                // gün her değiştiğinde haftanın saatlerini yeniden hesapla
-                if (DateTime.Now.Day != lastDay)
-                {
-                    CalculateThisWeeksDates();
-                    lastDay = DateTime.Now.Day;
-                }
-            };
-
-            Console.WriteLine("Başlatıldı.");
+            await Log(new LogMessage(LogSeverity.Info, "BossBot", "Başlatıldı."));
 
             await Task.Delay(-1);
+        }
+
+        private static void Check(bool first = false)
+        {
+            if (LastMinute == DateTime.Now.Minute)
+            {
+                return;
+            }
+
+            if (!first && DateTime.Now.Minute % 5 != 0)
+            {
+                Log(new LogMessage(LogSeverity.Info, "BossBot", "Bir dakika geçti."));
+            }
+
+            LastMinute = DateTime.Now.Minute;
+            // hafta her değiştiğinde haftanın saatlerini yeniden hesapla
+            if (CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(DateTime.Now, CalendarWeekRule.FirstFullWeek,
+                    System.DayOfWeek.Monday) != LastWeek)
+            {
+                if (!first)
+                {
+                    Log(new LogMessage(LogSeverity.Info, "BossBot", "Bir hafta geçti. Saatler yeniden hesaplanıyor."));
+                    CalculateThisWeeksDates();
+                }
+
+                LastWeek = CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(DateTime.Now,
+                    CalendarWeekRule.FirstFullWeek, System.DayOfWeek.Monday);
+            }
+
+            if (DateTime.Now.Minute % 5 == 0)
+            {
+                if (!first)
+                {
+                    Log(new LogMessage(LogSeverity.Info, "BossBot", "5 dakika geçti. Liste kontrol ediliyor."));
+                }
+
+                CheckForTime();
+            }
         }
 
         private static async Task Login()
@@ -126,36 +157,40 @@ namespace BossBot
             {
                 if (moment.Key.AddMinutes(-35).DatesEqualsIgnoreSeconds(DateTime.Now))
                 {
+                    await Log(new LogMessage(LogSeverity.Info, "BossBot", "Bir ana 35 dakika kalmış. " +
+                                                                          "Discord hesabına giriş yapılıyor."));
                     await Login();
                 }
 
                 if (moment.Key.AddMinutes(-30).DatesEqualsIgnoreSeconds(DateTime.Now))
                 {
-                    await NotifyUsers($"{moment.Value}'ya 30 dakika kaldı!");
+                    await NotifyUsers($"{moment.Value} 30 dakika sonra doğacak! <@&469922791768981515>");
                 }
 
                 if (moment.Key.AddMinutes(-15).DatesEqualsIgnoreSeconds(DateTime.Now))
                 {
-                    await NotifyUsers($"{moment.Value}'ya 15 dakika kaldı!");
+                    await NotifyUsers($"{moment.Value} 15 dakika sonra doğacak! <@&469922791768981515>");
                 }
 
                 if (moment.Key.AddMinutes(-10).DatesEqualsIgnoreSeconds(DateTime.Now))
                 {
-                    await NotifyUsers($"{moment.Value}'ya 10 dakika kaldı!");
+                    await NotifyUsers($"{moment.Value} 10 dakika sonra doğacak! <@&469922791768981515>");
                 }
 
                 if (moment.Key.AddMinutes(-5).DatesEqualsIgnoreSeconds(DateTime.Now))
                 {
-                    await NotifyUsers($"{moment.Value}'ya 5 dakika kaldı!");
+                    await NotifyUsers($"{moment.Value} 5 dakika sonra doğacak! <@&469922791768981515>");
                 }
 
                 if (moment.Key.DatesEqualsIgnoreSeconds(DateTime.Now))
                 {
-                    await NotifyUsers($"{moment.Value} doğdu!");
+                    await NotifyUsers($"{moment.Value} doğdu! <@&469922791768981515>");
                 }
 
                 if (moment.Key.AddMinutes(5).DatesEqualsIgnoreSeconds(DateTime.Now))
                 {
+                    await Log(new LogMessage(LogSeverity.Info, "BossBot", "Bir anın üzerinden 5 dakika geçti. " +
+                                                                          "Discord hesabından çıkış yapılıyor."));
                     await Logout();
                 }
             }
@@ -163,9 +198,9 @@ namespace BossBot
 
         private static async Task NotifyUsers(string message)
         {
-            Console.WriteLine($"\"{message}\" mesajı gönderiliyor...");
+            await Log(new LogMessage(LogSeverity.Info, "BossBot", $"\"{message}\" mesajı gönderiliyor..."));
             await Client.GetGuild(ChannelId).GetTextChannel(ChannelId).SendMessageAsync(message);
-            Console.WriteLine("Mesaj gönderildi.");
+            await Log(new LogMessage(LogSeverity.Info, "BossBot", "Mesaj gönderildi."));
         }
 
         private static void CalculateThisWeeksDates()
